@@ -1,6 +1,10 @@
-import { View, Text, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TextInput, Image, TouchableOpacity, ActivityIndicator } from 'react-native';
 import NeoBrutalistCard from '@/components/NeoBrutalistCard';
 import { Compass, MapPin, TrendingUp } from 'lucide-react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { searchDestinations, getDestinationImage } from '@/lib/destinationService';
+import { Destination } from '@/types/models';
+import { useRouter } from 'expo-router';
 
 const popularDestinations = [
   { name: 'Goa', budget: '₹8,000-15,000', days: '3-5 days', type: 'Beach' },
@@ -20,6 +24,36 @@ const budgetTips = [
 ];
 
 export default function DiscoverScreen() {
+  const router = useRouter();
+  const [query, setQuery] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [results, setResults] = useState<Destination[]>([]);
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+    }
+    if (!query || query.trim().length < 2) {
+      setResults([]);
+      return;
+    }
+    debounceRef.current = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const res = await searchDestinations(query.trim(), 10);
+        setResults(res);
+      } catch (e) {
+        setResults([]);
+      } finally {
+        setLoading(false);
+      }
+    }, 400);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [query]);
+
   const getColorForType = (type: string) => {
     const colors: Record<string, string> = {
       Beach: '#4A90E2',
@@ -42,31 +76,71 @@ export default function DiscoverScreen() {
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        <Text style={styles.sectionTitle}>Search Destinations</Text>
+        <NeoBrutalistCard color="#FFFFFF" style={{ marginBottom: 16 }}>
+          <TextInput
+            placeholder="Search city or region..."
+            placeholderTextColor="#666"
+            value={query}
+            onChangeText={setQuery}
+            style={styles.searchInput}
+          />
+          {loading ? (
+            <View style={{ paddingTop: 12, paddingBottom: 4 }}>
+              <ActivityIndicator color="#000" />
+            </View>
+          ) : null}
+          {results.map((d) => (
+            <TouchableOpacity
+              key={d.id}
+              style={styles.resultItem}
+              onPress={() => {
+                router.push({ pathname: '/trip/place-info', params: { name: d.name, country: d.country || '', lat: String(d.latitude), lng: String(d.longitude) } });
+              }}>
+              {d.imageUrl ? (
+                <Image source={{ uri: d.imageUrl }} style={styles.resultImage} />
+              ) : (
+                <View style={[styles.resultImage, { backgroundColor: '#EEE', justifyContent: 'center', alignItems: 'center' }]}>
+                  <MapPin size={20} color="#000" />
+                </View>
+              )}
+              <View style={{ flex: 1 }}>
+                <Text style={styles.resultName}>{d.name}</Text>
+                <Text style={styles.resultMeta}>{d.country || 'Unknown country'}</Text>
+              </View>
+            </TouchableOpacity>
+          ))}
+        </NeoBrutalistCard>
+        
         <Text style={styles.sectionTitle}>Trending Destinations</Text>
 
-        {popularDestinations.map((destination, index) => (
-          <NeoBrutalistCard
-            key={index}
-            color={getColorForType(destination.type)}
-            style={styles.destinationCard}>
-            <View style={styles.destinationHeader}>
-              <Text style={styles.destinationName}>{destination.name}</Text>
-              <View style={styles.typeBadge}>
-                <Text style={styles.typeBadgeText}>{destination.type}</Text>
-              </View>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+          {popularDestinations.map((destination, index) => (
+            <View key={index} style={{ width: '48%' }}>
+              <NeoBrutalistCard
+                color={getColorForType(destination.type)}
+                style={styles.destinationCard}>
+                <TrendingImage name={destination.name} />
+                <View style={styles.destinationHeader}>
+                  <Text style={styles.destinationName}>{destination.name}</Text>
+                  <View style={styles.typeBadge}>
+                    <Text style={styles.typeBadgeText}>{destination.type}</Text>
+                  </View>
+                </View>
+                <View style={styles.destinationDetails}>
+                  <View style={styles.detailItem}>
+                    <Text style={styles.detailLabel}>Budget</Text>
+                    <Text style={styles.detailValue}>{destination.budget}</Text>
+                  </View>
+                  <View style={styles.detailItem}>
+                    <Text style={styles.detailLabel}>Duration</Text>
+                    <Text style={styles.detailValue}>{destination.days}</Text>
+                  </View>
+                </View>
+              </NeoBrutalistCard>
             </View>
-            <View style={styles.destinationDetails}>
-              <View style={styles.detailItem}>
-                <Text style={styles.detailLabel}>Budget</Text>
-                <Text style={styles.detailValue}>{destination.budget}</Text>
-              </View>
-              <View style={styles.detailItem}>
-                <Text style={styles.detailLabel}>Duration</Text>
-                <Text style={styles.detailValue}>{destination.days}</Text>
-              </View>
-            </View>
-          </NeoBrutalistCard>
-        ))}
+          ))}
+        </View>
 
         <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Budget Travel Tips</Text>
 
@@ -94,6 +168,32 @@ export default function DiscoverScreen() {
       </ScrollView>
     </View>
   );
+}
+
+function TrendingImage({ name }: { name: string }) {
+  const [uri, setUri] = useState<string | undefined>(undefined);
+  const [loading, setLoading] = useState<boolean>(true);
+  useEffect(() => {
+    let isMounted = true;
+    (async () => {
+      try {
+        const u = await getDestinationImage(name);
+        if (isMounted) setUri(u);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    })();
+    return () => {
+      isMounted = false;
+    };
+  }, [name]);
+  if (loading) {
+    return <View style={{ height: 90, backgroundColor: '#FFF', borderWidth: 2, borderColor: '#000', marginBottom: 8 }} />;
+  }
+  if (!uri) {
+    return <View style={{ height: 90, backgroundColor: '#EEE', borderWidth: 2, borderColor: '#000', marginBottom: 8 }} />;
+  }
+  return <Image source={{ uri }} style={{ height: 90, width: '100%', borderWidth: 2, borderColor: '#000', marginBottom: 8 }} resizeMode="cover" />;
 }
 
 const styles = StyleSheet.create({
@@ -134,6 +234,36 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#000000',
     marginBottom: 16,
+  },
+  searchInput: {
+    borderWidth: 2,
+    borderColor: '#000',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: '#000',
+  },
+  resultItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingTop: 12,
+  },
+  resultImage: {
+    width: 48,
+    height: 48,
+    borderWidth: 2,
+    borderColor: '#000',
+    marginRight: 8,
+  },
+  resultName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#000',
+  },
+  resultMeta: {
+    fontSize: 12,
+    color: '#000',
+    opacity: 0.7,
   },
   destinationCard: {
     marginBottom: 16,

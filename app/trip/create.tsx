@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -8,17 +8,21 @@ import {
   TouchableOpacity,
   Platform,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTripStore } from '@/store/tripStore';
 import { TripType } from '@/types/models';
 import NeoBrutalistButton from '@/components/NeoBrutalistButton';
 import NeoBrutalistCard from '@/components/NeoBrutalistCard';
 import { ArrowLeft } from 'lucide-react-native';
+import { searchDestinations } from '@/lib/destinationService';
+import { Destination } from '@/types/models';
 
 export default function CreateTripScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
   const addTrip = useTripStore((state) => state.addTrip);
 
+  const [origin, setOrigin] = useState('');
   const [destination, setDestination] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -27,14 +31,45 @@ export default function CreateTripScreen() {
   const [numTravelers, setNumTravelers] = useState('1');
   const [description, setDescription] = useState('');
 
+  const [destQuery, setDestQuery] = useState('');
+  const [destResults, setDestResults] = useState<Destination[]>([]);
+  const [loading, setLoading] = useState(false);
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    const prefill = params.prefillDestination as string | undefined;
+    if (prefill && !destination) {
+      setDestination(prefill);
+      setDestQuery(prefill);
+    }
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (!destQuery || destQuery.trim().length < 2) {
+      setDestResults([]);
+      return;
+    }
+    debounceRef.current = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const res = await searchDestinations(destQuery.trim(), 8);
+        setDestResults(res);
+      } finally {
+        setLoading(false);
+      }
+    }, 400);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [destQuery]);
+
   const handleCreateTrip = async () => {
-    if (!destination || !startDate || !endDate || !totalBudget) {
+    if (!origin || !destination || !startDate || !endDate || !totalBudget) {
       alert('Please fill in all required fields');
       return;
     }
 
     await addTrip({
       destination,
+      origin,
       startDate,
       endDate,
       totalBudget: parseFloat(totalBudget),
@@ -58,14 +93,28 @@ export default function CreateTripScreen() {
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <NeoBrutalistCard style={styles.formCard}>
+          <Text style={styles.label}>Origin *</Text>
+          <TextInput
+            style={styles.input}
+            value={origin}
+            onChangeText={setOrigin}
+            placeholder="e.g., Bengaluru, Mumbai"
+            placeholderTextColor="#999"
+          />
+
           <Text style={styles.label}>Destination *</Text>
           <TextInput
             style={styles.input}
-            value={destination}
-            onChangeText={setDestination}
-            placeholder="e.g., Goa, Manali, Kerala"
+            value={destQuery}
+            onChangeText={setDestQuery}
+            placeholder="Search city or region..."
             placeholderTextColor="#999"
           />
+          {destResults.map((d) => (
+            <TouchableOpacity key={d.id} onPress={() => { setDestination(`${d.name}${d.country ? ', ' + d.country : ''}`); setDestQuery(`${d.name}${d.country ? ', ' + d.country : ''}`); }}>
+              <Text style={{ color: '#000', paddingVertical: 8 }}>{d.name}{d.country ? `, ${d.country}` : ''}</Text>
+            </TouchableOpacity>
+          ))}
 
           <Text style={styles.label}>Start Date * (YYYY-MM-DD)</Text>
           <TextInput

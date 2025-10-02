@@ -70,11 +70,13 @@ export default function HomeScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Upcoming Trips</Text>
-            <TouchableOpacity onPress={() => router.push('/trip/create')}>
-              <View style={styles.addButton}>
-                <Plus size={24} color="#000" />
-              </View>
-            </TouchableOpacity>
+            {upcomingTrips.length > 0 && (
+              <TouchableOpacity onPress={() => router.push('/trip/create')}>
+                <View style={styles.addButton}>
+                  <Plus size={24} color="#000" />
+                </View>
+              </TouchableOpacity>
+            )}
           </View>
 
           {upcomingTrips.length === 0 ? (
@@ -134,25 +136,7 @@ export default function HomeScreen() {
           )}
         </View>
 
-        <View style={styles.quickActions}>
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
-          <View style={styles.actionGrid}>
-            <TouchableOpacity
-              style={styles.actionItem}
-              onPress={() => router.push('/discover')}>
-              <NeoBrutalistCard color="#FF9500">
-                <Text style={styles.actionText}>Discover Places</Text>
-              </NeoBrutalistCard>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.actionItem}
-              onPress={() => router.push('/budget')}>
-              <NeoBrutalistCard color="#FF6B9D">
-                <Text style={styles.actionText}>Track Budget</Text>
-              </NeoBrutalistCard>
-            </TouchableOpacity>
-          </View>
-        </View>
+        {/* Quick Actions removed to avoid redundancy with tab bar */}
       </ScrollView>
     </View>
   );

@@ -5,6 +5,7 @@ export type ExpenseCategory = 'Transport' | 'Accommodation' | 'Food' | 'Activiti
 export interface Trip {
   id: string;
   destination: string;
+  origin?: string;
   startDate: string;
   endDate: string;
   totalBudget: number;
@@ -49,4 +50,15 @@ export interface TripMember {
   tripId: string;
   name: string;
   email?: string;
+}
+
+export interface Destination {
+  id: string; // provider id or stable slug
+  name: string;
+  country?: string;
+  countryCode?: string;
+  latitude: number;
+  longitude: number;
+  type: 'city' | 'region';
+  imageUrl?: string;
 }
